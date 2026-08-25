@@ -1,0 +1,9 @@
+# Ignore heavy dataset folders
+data/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore editor workspace setups
+.vscode/
