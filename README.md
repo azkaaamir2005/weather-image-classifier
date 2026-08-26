@@ -13,6 +13,11 @@ To eliminate visual ambiguity, the 11-class raw Kaggle weather dataset is progra
 - **Desktop Interface:** Standalone dual-panel GUI (`predict.py`) displaying live single-image predictions, confidence bar graphs, and inference timing.
 - **Stretch Goal Integration:** Live public traffic camera snapshot ingestion via direct URL fetching (`predict_traffic_url`).
 
+## Dataset Setup
+
+1. Download the full dataset from [Kaggle Weather Dataset](https://www.kaggle.com/datasets/jehanbhathena/weather-dataset).
+2. Extract the archive into your project directory under `data/weather_dataset/`:
+
 ## Project Structure
 ```text
 weather image classifier/
