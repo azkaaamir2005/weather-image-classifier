@@ -1,5 +1,7 @@
 import os
 import time
+import base64
+from io import BytesIO
 from pathlib import Path
 import streamlit as st
 import numpy as np
@@ -51,22 +53,74 @@ def run_inference(pil_image):
     
     return probabilities, latency_ms
 
+def img_to_base64(pil_img):
+    buffered = BytesIO()
+    pil_img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
 # ==========================================
-# 2. PREMIUM UI HEADER & TOP NAVIGATION
+# 2. UI CONFIGURATION & CSS INJECTION
 # ==========================================
 st.set_page_config(page_title="Intel Weather AI Portal", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS: Completely collapse/hide sidebar & style top toggle bar
 st.markdown("""
     <style>
-        /* Hide sidebar entirely */
-        [data-testid="stSidebar"] {
-            display: none !important;
+        /* Hide sidebar and Streamlit top toolbar */
+        [data-testid="stSidebar"] { display: none !important; }
+        header[data-testid="stHeader"] { display: none !important; }
+        
+        /* Page padding */
+        .block-container {
+            padding-top: 3rem !important;
+            padding-bottom: 2rem !important;
         }
         
         .reportview-container { background: #0e1117; }
-        h1 { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700; color: #ffffff !important; }
+        
+        h1 { 
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+            font-weight: 700; 
+            color: #ffffff !important; 
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.3 !important;
+            font-size: 1.8rem !important;
+        }
+        
         h2, h3 { color: #00E5FF !important; font-weight: 600; }
+
+        /* Generous spacing around File Uploader */
+        div[data-testid="stFileUploader"] {
+            margin-top: 10px !important;
+            margin-bottom: 45px !important;
+        }
+
+        /* Top Predicted Class Card Box */
+        .prediction-card {
+            background-color: #1e222b;
+            padding: 18px 20px;
+            border-radius: 8px;
+            border-left: 5px solid #00E5FF;
+            height: 220px !important;
+            box-sizing: border-box !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* Probability Breakdown Card Box */
+        .prob-card {
+            background-color: #1e222b;
+            padding: 16px 20px;
+            border-radius: 8px;
+            border: 1px solid #2e3545;
+            border-left: 5px solid #377ACC;
+            height: 220px !important;
+            box-sizing: border-box !important;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
         
         /* Metric Box Styling */
         .stMetric { 
@@ -85,6 +139,7 @@ st.markdown("""
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        
         div[data-testid="stMetricLabel"] { 
             color: #8a99ad !important; 
             font-size: 11px !important; 
@@ -98,32 +153,41 @@ st.markdown("""
             color: #00E5FF;
             padding: 4px 10px;
             border-radius: 6px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
             border: 1px solid #00E5FF33;
-            margin-right: 8px;
+            margin-right: 6px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Top Right View Control Bar
-nav_col1, nav_col2 = st.columns([2.5, 1.2])
+# Navigation header row
+head_col1, head_col2 = st.columns([2.2, 1.8], vertical_alignment="center")
 
-with nav_col2:
-    page = st.radio(
-        "NAVIGATION",
-        ["📊 Model Architecture & Diagnostics", "⚡ Live Predictive Engine"],
-        horizontal=True,
+with head_col2:
+    page = st.segmented_control(
+        "Navigation",
+        options=["⚡ Live Predictive Engine", "📊 Model Architecture & Diagnostics"],
+        default="⚡ Live Predictive Engine",
         label_visibility="collapsed"
     )
+
+with head_col1:
+    if page == "📊 Model Architecture & Diagnostics":
+        st.title("🛰️ Edge-Optimized Weather Engine")
+    else:
+        st.title("🎯 Real-Time Predictive Analysis")
+
+st.markdown("---")
+
+if not page:
+    page = "⚡ Live Predictive Engine"
 
 # ==========================================
 # VIEW 1: DIAGNOSTICS
 # ==========================================
 if page == "📊 Model Architecture & Diagnostics":
-    st.title("🛰️ Edge-Optimized Weather Classification Engine")
     st.write("Production-ready diagnostic analysis interface validating deep layer feature maps.")
-    st.markdown("---")
     
     r1_col1, r1_col2, r1_col3 = st.columns(3)
     with r1_col1:
@@ -145,7 +209,7 @@ if page == "📊 Model Architecture & Diagnostics":
         
     st.markdown("<br>", unsafe_allow_html=True)
     
-    col_left, col_right = st.columns([1.2, 1])
+    col_left, col_right = st.columns([1.3, 1])
     
     with col_left:
         st.subheader("Model Validation: Confusion Matrix")
@@ -174,51 +238,65 @@ if page == "📊 Model Architecture & Diagnostics":
 # VIEW 2: INFERENCE PREDICTOR
 # ==========================================
 elif page == "⚡ Live Predictive Engine":
-    st.title("🎯 Real-Time Predictive Analysis")
-    st.markdown("---")
-    
     if model is None:
         st.error(f"System Check Error: Target parameter matrix file '{WEIGHTS_PATH.name}' is missing.")
     else:
         uploaded_file = st.file_uploader("DROP ATMOSPHERIC IMAGE RECORD TO PROCESS...", type=["jpg", "jpeg", "png"])
         
         if uploaded_file is not None:
-            col_display_img, col_display_chart = st.columns([1, 1.3])
             user_img = Image.open(uploaded_file)
             
-            with col_display_img:
-                st.markdown("<h3 style='margin-bottom:15px;'>📸 Analysis Target</h3>", unsafe_allow_html=True)
-                st.image(user_img, use_container_width=True)
+            with st.spinner("Processing deep tensor array..."):
+                prob_array, latency_ms = run_inference(user_img)
+                max_idx = np.argmax(prob_array)
+                predicted_label = CLASSES[max_idx]
+                confidence_pct = prob_array[max_idx] * 100
                 
-            with col_display_chart:
-                st.markdown("<h3 style='margin-bottom:15px;'>🧠 AI Output Vectors</h3>", unsafe_allow_html=True)
+                # Dedicated visual separator between uploader bar and section titles
+                st.markdown("<div style='margin-bottom: 35px;'></div>", unsafe_allow_html=True)
                 
-                with st.spinner("Processing deep tensor array..."):
-                    prob_array, latency_ms = run_inference(user_img)
-                    max_idx = np.argmax(prob_array)
-                    predicted_label = CLASSES[max_idx]
-                    confidence_pct = prob_array[max_idx] * 100
+                # Single Row 3-Column Layout
+                col_img, col_class, col_probs = st.columns([1, 1, 1.25], vertical_alignment="top")
+                
+                with col_img:
+                    st.markdown("<h3 style='margin-bottom:12px; margin-top:0;'>📸 Analysis Target</h3>", unsafe_allow_html=True)
+                    img_b64 = img_to_base64(user_img)
+                    st.markdown(f'<img src="data:image/png;base64,{img_b64}" style="height:220px; width:100%; object-fit:cover; border-radius:8px;" />', unsafe_allow_html=True)
                     
+                with col_class:
+                    st.markdown("<h3 style='margin-bottom:12px; margin-top:0;'>🧠 Output Vector</h3>", unsafe_allow_html=True)
                     st.markdown(f"""
-                        <div style="background-color:#1e222b; padding:20px; border-radius:8px; border-left:6px solid #00E5FF; margin-bottom:20px;">
+                        <div class="prediction-card">
                             <span style="color:#8a99ad; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:1.5px;">Top Predicted Class</span>
-                            <h2 style="margin:2px 0 8px 0; color:#ffffff !important; font-size:34px; font-weight:700;">{predicted_label.upper()}</h2>
-                            <div style="margin-bottom:12px;">
-                                <span style="color:#00E5FF; font-size:16px; font-weight:600;">System Confidence: {confidence_pct:.2f}%</span>
+                            <h2 style="margin:4px 0 8px 0; color:#ffffff !important; font-size:28px; font-weight:700;">{predicted_label.upper()}</h2>
+                            <div style="margin-bottom:10px;">
+                                <span style="color:#00E5FF; font-size:14px; font-weight:600;">System Confidence: {confidence_pct:.2f}%</span>
                             </div>
-                            <div>
-                                <span class="tech-badge">⚡ Latency: {latency_ms:.1f} ms</span>
-                                <span class="tech-badge">💾 Footprint: ~{MODEL_SIZE_MB} MB</span>
+                            <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                <span class="tech-badge">⚡ {latency_ms:.1f} ms</span>
+                                <span class="tech-badge">💾 ~{MODEL_SIZE_MB} MB</span>
                             </div>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    st.markdown("<span style='color:#8a99ad; font-size:13px; font-weight:600;'>Probability Breakdown</span>", unsafe_allow_html=True)
+                with col_probs:
+                    st.markdown("<h3 style='margin-bottom:12px; margin-top:0;'>📊 Probability Breakdown</h3>", unsafe_allow_html=True)
                     
+                    bars_html = ""
                     for name, prob in zip(CLASSES, prob_array):
-                        col_label, col_bar = st.columns([1, 4])
-                        with col_label:
-                            st.markdown(f"<p style='color:#ffffff; margin:0; line-height:30px; font-weight:500;'>{name.capitalize()}</p>", unsafe_allow_html=True)
-                        with col_bar:
-                            st.progress(float(prob))
-                            st.markdown(f"<p style='color:#8a99ad; font-size:12px; margin:-10px 0 10px 0; text-align:right;'>{prob*100:.1f}%</p>", unsafe_allow_html=True)
+                        pct = prob * 100
+                        bars_html += f"""
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                            <span style="color: #ffffff; font-size: 13px; font-weight: 500; width: 80px;">{name.capitalize()}</span>
+                            <div style="flex-grow: 1; background-color: #111827; height: 8px; border-radius: 4px; margin: 0 10px; overflow: hidden;">
+                                <div style="width: {pct:.1f}%; background-color: #00E5FF; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                            <span style="color: #8a99ad; font-size: 12px; font-weight: 600; width: 45px; text-align: right;">{pct:.1f}%</span>
+                        </div>
+                        """
+                    
+                    st.markdown(f"""
+                        <div class="prob-card">
+                            {bars_html}
+                        </div>
+                    """, unsafe_allow_html=True)
